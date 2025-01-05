@@ -33,6 +33,22 @@ def estatisticas_gerais(df, nome_dispositivo, pdf):
 
     return stats
 
+# Função para gerar Box Plots combinados por hora
+def box_plots_por_hora(df, nome_dispositivo, pdf):
+    plt.figure(figsize=(20, 15))
+    plt.suptitle(f'Box Plots por Hora - {nome_dispositivo}', fontsize=16, weight='bold')
+
+    for hour in range(24):
+        ax = plt.subplot(6, 4, hour + 1)
+        data_up = df[df['hour'] == hour]['bytes_up_log'].dropna()
+        data_down = df[df['hour'] == hour]['bytes_down_log'].dropna()
+        if not data_up.empty or not data_down.empty:
+            ax.boxplot([data_up, data_down], labels=['Upload', 'Download'])
+        ax.set_title(f'Hora {hour}')
+
+    pdf.savefig()
+    plt.close()
+
 # Função para gerar Box Plots combinados
 def box_plots_combinados(smart_tv, chromecast, pdf):
     data = [
@@ -44,7 +60,7 @@ def box_plots_combinados(smart_tv, chromecast, pdf):
     labels = ['Upload Smart-TV', 'Upload Chromecast', 'Download Smart-TV', 'Download Chromecast']
 
     plt.figure(figsize=(10, 6))
-    plt.boxplot(data, labels=labels)
+    plt.boxplot(data, tick_labels=labels)
     plt.title('Box Plots Comparativos')
     plt.ylabel('Valor Log10')
     pdf.savefig()  # Salvar gráfico no PDF
@@ -121,6 +137,36 @@ def histograma_horario_pico(df, nome_dispositivo, hora_pico_upload, hora_pico_do
         pdf.savefig()
         plt.close()
 
+# Função para criar QQ Plot
+def qq_plot_interpolado(dataset1, dataset2, nome_dispositivo, pdf):
+    data1 = np.sort(dataset1.dropna())
+    data2 = np.sort(dataset2.dropna())
+
+    if len(data1) == 0 or len(data2) == 0:
+        return  # Evitar gráficos vazios
+
+    quantis = np.linspace(0, 1, len(data1))
+    interpolados = np.interp(quantis, np.linspace(0, 1, len(data2)), data2)
+
+    plt.figure(figsize=(8, 6))
+    plt.scatter(data1, interpolados, alpha=0.7)
+    plt.plot([min(data1), max(data1)], [min(data1), max(data1)], 'r--')
+    plt.title(f"QQ Plot - {nome_dispositivo}")
+    plt.xlabel('Dataset 1')
+    plt.ylabel('Dataset 2')
+    pdf.savefig()
+    plt.close()
+
+# Função para scatter plot
+def scatter_plot(dataset1, dataset2, nome_dispositivo, pdf):
+    plt.figure(figsize=(8, 6))
+    plt.scatter(dataset1, dataset2, alpha=0.5)
+    plt.title(f"Scatter Plot - {nome_dispositivo}")
+    plt.xlabel('Upload (Log10)')
+    plt.ylabel('Download (Log10)')
+    pdf.savefig()
+    plt.close()
+
 # Função para gerar o relatório final
 def gerar_relatorio():
     with PdfPages("relatorio_final.pdf") as pdf:
@@ -130,6 +176,10 @@ def gerar_relatorio():
 
         # Box Plots combinados
         box_plots_combinados(smart_tv, chromecast, pdf)
+
+        # Box Plots por hora
+        box_plots_por_hora(smart_tv, 'Smart-TV', pdf)
+        box_plots_por_hora(chromecast, 'Chromecast', pdf)
 
         # Distribuição empírica acumulada
         distribuicao_empirica(smart_tv['bytes_up_log'], 'Smart-TV', "Distribuição Empírica - Upload", pdf)
@@ -148,6 +198,14 @@ def gerar_relatorio():
         # Histogramas dos horários de pico
         histograma_horario_pico(smart_tv, 'Smart-TV', hora_pico_smart_tv_upload, hora_pico_smart_tv_download, pdf)
         histograma_horario_pico(chromecast, 'Chromecast', hora_pico_chromecast_upload, hora_pico_chromecast_download, pdf)
+
+        # QQ Plot
+        qq_plot_interpolado(smart_tv['bytes_up_log'], chromecast['bytes_up_log'], 'Upload - Smart-TV vs Chromecast', pdf)
+        qq_plot_interpolado(smart_tv['bytes_down_log'], chromecast['bytes_down_log'], 'Download - Smart-TV vs Chromecast', pdf)
+
+        # Scatter Plot
+        scatter_plot(smart_tv['bytes_up_log'], smart_tv['bytes_down_log'], 'Smart-TV', pdf)
+        scatter_plot(chromecast['bytes_up_log'], chromecast['bytes_down_log'], 'Chromecast', pdf)
 
 # Função para identificar horários de maior tráfego
 def horarios_maior_trafego(df):
